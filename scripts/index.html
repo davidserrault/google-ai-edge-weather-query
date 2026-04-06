@@ -1,0 +1,118 @@
+<!--
+@license
+David Serrault - April 26
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Query Weather</title>
+  </head>
+  <body>
+
+    <script>
+
+     /**
+     * Performs a search to get the current weather on a specific city with the API OpenWeatherMap.
+     * @param {string} city-name - the name of the city (ex: "London", "Paris", "Tokyo", "Seoul", "Beijin", "New York".)
+     */
+
+
+      function logWeatherData(data) {
+          console.log("[LOG] Weather JSON Content:");
+          console.log(JSON.stringify(data, null, 2));
+      }
+
+
+        async function getWeatherData(city, apiKey = '<-- YOUR openweathermap.org API KEY -->', units = 'metric') {
+         // Build the URL with the params
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=${units}`;
+
+          try {
+              const response = await fetch(url);
+
+              // Check response validity (code 200-299)
+              if (!response.ok) {
+                  const errorData = await response.json();
+                  return `Error with data call ${response.status} - ${errorData.message || 'Impossible to get data'}`;
+              }
+
+              // Data extraction JSON
+              const data = await response.json();
+
+
+          // --- JSON MANIPULATIONS --- 
+
+          // --- 1. LOCAL TIME CALCULATION & KEY REPLACEMENT ---
+          const localTimestamp = (data.dt + data.timezone) * 1000;
+          const date = new Date(localTimestamp);
+          const hours = date.getUTCHours().toString().padStart(2, '0');
+          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+          
+          // Add local_time and remove the numeric timezone offset
+          data.local_time = `${hours} hours and ${minutes} minutes`;
+          delete data.timezone;
+
+          // --- 2. ROUNDING TEMPERATURE VALUES ---
+          if (data.main) {
+              const tempFields = ['temp', 'feels_like', 'temp_min', 'temp_max'];
+              tempFields.forEach(field => {
+                  if (data.main[field] !== undefined) {
+                      data.main[field] = Math.round(data.main[field]);
+                  }
+              });
+          }
+
+          // --- 3. ROUNDING WIND SPEED ---
+          if (data.wind) {
+              if (data.wind.speed !== undefined) {
+                  data.wind.speed = Math.round(data.wind.speed);
+              }
+              if (data.wind.gust !== undefined) {
+                  data.wind.gust = Math.round(data.wind.gust);
+              }
+          }
+
+          // --- 4. LOGGING THE MODIFIED CONTENT FOR DEBUG ---
+          logWeatherData(data);
+
+
+          // --- Return JSON formated weather data --- 
+              return JSON.stringify(data, null, 2);
+
+          } catch (error) {
+              // Error management
+              return `A critital error has occured : ${error.message}`;
+          }
+      }
+
+
+    window['ai_edge_gallery_get_result'] = async (data) => {
+      try {
+        const jsonData = JSON.parse(data);
+        return JSON.stringify(await getWeatherData(jsonData['city-name']));
+
+      } catch (e) {
+        console.log(e);
+        return JSON.stringify({error: `Failed to calculate hash: ${e.message}`});
+      }
+    };
+
+
+    </script>
+  </body>
+</html>
